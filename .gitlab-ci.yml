@@ -1,0 +1,19 @@
+stages:
+  - test
+  - deploy
+
+# Test stage
+test:
+  stage: test
+  script:
+    - pip install -r requirements.txt
+    - python manage.py test
+
+# Deploy stage
+deploy:
+  stage: deploy
+  script:
+    - docker-compose down
+    - docker-compose up --build -d
+  only:
+    - master
