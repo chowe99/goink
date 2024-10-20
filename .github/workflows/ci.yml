@@ -64,6 +64,11 @@ jobs:
         run: |
           docker network inspect ${{ job.services.db.network }}
 
+      - name: Debug- Test connectivity from web container to db
+        run: |
+          docker exec ${{ job.services.db.id }} ping -c 4 db || echo "Ping to db from web failed"
+          docker exec ${{ job.services.db.id }} nslookup db || echo "DNS lookup for db from web failed"
+
       - name: Wait for PostgreSQL to be ready
         run: |
           echo "Testing connection to PostgreSQL"
