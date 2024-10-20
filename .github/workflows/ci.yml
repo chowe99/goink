@@ -66,8 +66,8 @@ jobs:
 
       - name: Debug- Test connectivity from web container to db
         run: |
-          docker exec ${{ job.services.db.id }} ping -c 4 db || echo "Ping to db from web failed"
-          docker exec ${{ job.services.db.id }} nslookup db || echo "DNS lookup for db from web failed"
+          echo "Testing connectivity to the DB service using curl..."
+          docker exec ${{ job.services.web.id }} curl -s -o /dev/null -w "%{http_code}" http://db:5432 || echo "Failed to connect to DB"
 
       - name: Wait for PostgreSQL to be ready
         run: |
