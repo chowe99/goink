@@ -5,10 +5,20 @@ on:
     branches:
       - master  
       - develop
+    paths:
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'goink/**'
+      - 'scraper/**'
   pull_request:
     branches:
       - master
       - develop
+    paths:
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'goink/**'
+      - 'scraper/**'
 
 jobs:
   build-and-test:
@@ -41,41 +51,62 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Check for Docker-related changes
+        id: changes
+        run: |
+          echo "Checking for changes in Dockerfile, requirements.txt, goink/**, scraper/**..."
+          # Fetch the base branch to compare
+          git fetch origin ${{ github.base_ref }}
+          # Check for changes in specified paths
+          if git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }} | grep -E '^Dockerfile$|^requirements.txt$|^goink/|^scraper/'; then
+            echo "build_and_push=true" >> $GITHUB_ENV
+          else
+            echo "build_and_push=false" >> $GITHUB_ENV
+          fi
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Debug- Check hosts
-        run: |
-          echo "Hosts file:"
-          cat /etc/hosts
+      # - name: Debug - Check hosts
+      #   run: |
+      #     echo "Hosts file:"
+      #     cat /etc/hosts
 
-      - name: Debug- Network inspection
-        run: |
-          echo "Network interfaces:"
-          ifconfig || ip addr
-          echo "Ping DB container:"
-          ping -c 4 db || echo "DB not reachable"
-          echo "DNS lookup for 'db':"
-          nslookup db || echo "DNS lookup failed"
-          echo "Checking open ports:"
-          netstat -tuln || ss -tuln
+      # - name: Debug - Network inspection
+      #   run: |
+      #     echo "Network interfaces:"
+      #     ifconfig || ip addr
+      #     echo "Ping DB container:"
+      #     ping -c 4 db || echo "DB not reachable"
+      #     echo "DNS lookup for 'db':"
+      #     nslookup db || echo "DNS lookup failed"
+      #     echo "Checking open ports:"
+      #     netstat -tuln || ss -tuln
 
-      - name: Debug- Check Docker network
-        run: |
-          docker network inspect ${{ job.services.db.network }}
+      # - name: Debug - Check Docker network
+      #   run: |
+      #     docker network inspect ${{ job.services.db.network }}
 
-      - name: Debug- Test connectivity to the DB service using curl
-        run: |
-          echo "Testing connectivity to the DB service using curl..."
-          DB_CONTAINER=$(docker ps --filter "label=db=goink_db" --format "{{.Names}}")
-          if [ -n "$DB_CONTAINER" ]; then
-            docker exec $DB_CONTAINER curl -s http://db:5432 || echo "Failed to connect to DB"
-          else
-            echo "DB container not found."
-            docker ps -a  # List all containers for debugging
-          fi
+      # - name: Debug - Test connectivity to the DB service using curl
+      #   run: |
+      #     echo "Testing connectivity to the DB service using curl..."
+      #     DB_CONTAINER=$(docker ps --filter "label=db=goink_db" --format "{{.Names}}")
+      #     if [ -n "$DB_CONTAINER" ]; then
+      #       docker exec $DB_CONTAINER curl -s http://db:5432 || echo "Failed to connect to DB"
+      #     else
+      #       echo "DB container not found."
+      #       docker ps -a  # List all containers for debugging
+      #     fi
 
       - name: Wait for PostgreSQL to be ready
         run: |
@@ -98,78 +129,22 @@ jobs:
         run: python manage.py test
 
       - name: Log in to Docker Hub
+        if: env.build_and_push == 'true'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Build and Push Docker Image
+        if: env.build_and_push == 'true'
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: chowewow/goink:latest
+          # Optionally add more tags if needed, e.g., based on branch or commit
+
       - name: Check PostgreSQL logs if failure
-        if: failure()
-        run: |
-          docker logs ${{ job.services.db.id }}
-
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
-      - name: Get remote Docker image digest
-        id: remote_digest
-        run: |
-          # Attempt to pull the latest image; if it doesn't exist, handle gracefully
-          docker pull chowewow/goink:latest || echo "Image does not exist yet."
-          
-          # Retrieve the RepoDigest of the remote image
-          remote_digest=$(docker image inspect chowewow/goink:latest --format='{{index .RepoDigests 0}}' || echo "none")
-          
-          # Extract only the digest part
-          remote_digest_only=$(echo $remote_digest | cut -d'@' -f2)
-          
-          echo "digest=$remote_digest_only" >> $GITHUB_ENV
-        continue-on-error: true
-
-      - name: Build local Docker image
-        id: local_digest
-        run: |
-          docker build -t chowewow/goink:latest .
-          
-          # Retrieve the RepoDigest of the local image
-          local_digest=$(docker image inspect chowewow/goink:latest --format='{{index .RepoDigests 0}}' || echo "none")
-          
-          # Extract only the digest part
-          local_digest_only=$(echo $local_digest | cut -d'@' -f2)
-          
-          echo "local_digest=$local_digest_only" >> $GITHUB_OUTPUT
-
-      - name: Compare image digests
-        id: compare
-        run: |
-          if [ "${{ env.digest }}" == "${{ steps.local_digest.outputs.local_digest }}" ]; then
-            echo "Images are the same, pulling the image."
-            echo "build_needed=false" >> $GITHUB_OUTPUT
-          else
-            echo "Images are different, building and pushing the image."
-            # Sanitize the ref name by replacing slashes with hyphens
-            sanitized_ref=$(echo "${GITHUB_REF#refs/heads/}" | tr '/' '-')
-            echo "sanitized_ref=$sanitized_ref" >> $GITHUB_ENV
-            echo "build_needed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Pull or push Docker image based on comparison
-        run: |
-          if [ "${{ steps.compare.outputs.build_needed }}" == "true" ]; then
-            # Tag the image with the sanitized branch name and commit SHA
-            docker tag chowewow/goink:latest chowewow/goink:${{ env.sanitized_ref }}
-            docker tag chowewow/goink:latest chowewow/goink:${{ github.sha }}
-            
-            # Push the tagged images
-            docker push chowewow/goink:latest
-            docker push chowewow/goink:${{ env.sanitized_ref }}
-            docker push chowewow/goink:${{ github.sha }}
-          else
-            # Pull the existing image to ensure it's up to date
-            docker pull chowewow/goink:latest
-          fi
-
-      - name: Check PostgreSQL container logs if failed
         if: failure()
         run: |
           docker logs ${{ job.services.db.id }}
