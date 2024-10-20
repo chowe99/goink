@@ -5,29 +5,42 @@ on:
     branches:
       - master  
       - develop
+    paths:
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'goink/**'
+      - 'scraper/**'
   pull_request:
     branches:
       - master
       - develop
+    paths:
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'goink/**'
+      - 'scraper/**'
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      DB_HOST: '127.0.0.1'
 
     services:
-      postgres:
+      db:
         image: postgres:13
         env:
-          POSTGRES_DB: goinkdb
-          POSTGRES_USER: goinkuser
-          POSTGRES_PASSWORD: goinkpass
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         ports:
           - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
+          --health-start-period 20s
 
     steps:
       - name: Checkout code
@@ -38,27 +51,104 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Check for Docker-related changes
+        id: changes
+        run: |
+          echo "Checking for changes in Dockerfile, requirements.txt, goink/**, scraper/**..."
+          # Fetch the base branch to compare
+          git fetch origin ${{ github.base_ref }}
+          # Check for changes in specified paths
+          if git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }} | grep -E '^Dockerfile$|^requirements.txt$|^goink/|^scraper/'; then
+            echo "build_and_push=true" >> $GITHUB_ENV
+          else
+            echo "build_and_push=false" >> $GITHUB_ENV
+          fi
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # - name: Debug - Check hosts
+      #   run: |
+      #     echo "Hosts file:"
+      #     cat /etc/hosts
+
+      # - name: Debug - Network inspection
+      #   run: |
+      #     echo "Network interfaces:"
+      #     ifconfig || ip addr
+      #     echo "Ping DB container:"
+      #     ping -c 4 db || echo "DB not reachable"
+      #     echo "DNS lookup for 'db':"
+      #     nslookup db || echo "DNS lookup failed"
+      #     echo "Checking open ports:"
+      #     netstat -tuln || ss -tuln
+
+      # - name: Debug - Check Docker network
+      #   run: |
+      #     docker network inspect ${{ job.services.db.network }}
+
+      # - name: Debug - Test connectivity to the DB service using curl
+      #   run: |
+      #     echo "Testing connectivity to the DB service using curl..."
+      #     DB_CONTAINER=$(docker ps --filter "label=db=goink_db" --format "{{.Names}}")
+      #     if [ -n "$DB_CONTAINER" ]; then
+      #       docker exec $DB_CONTAINER curl -s http://db:5432 || echo "Failed to connect to DB"
+      #     else
+      #       echo "DB container not found."
+      #       docker ps -a  # List all containers for debugging
+      #     fi
+
       - name: Wait for PostgreSQL to be ready
         run: |
-          until pg_isready -h localhost -p 5432; do
+          echo "Testing connection to PostgreSQL"
+          timeout=60  # Set a timeout (in seconds)
+          while ! pg_isready -h 127.0.0.1 -p 5432; do
             echo "Waiting for PostgreSQL..."
-            sleep 1
+            sleep 3
+            timeout=$((timeout - 3))
+            if [ $timeout -le 0 ]; then
+              echo "Timeout reached while waiting for PostgreSQL."
+              exit 1
+            fi
           done
 
       - name: Apply migrations
-        run: |
-          python manage.py migrate
+        run: python manage.py migrate
 
       - name: Run tests
-        run: |
-          python manage.py test
+        run: python manage.py test
 
-  # Optional: Add a deploy job later when we have a server
+      - name: Log in to Docker Hub
+        if: env.build_and_push == 'true'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        if: env.build_and_push == 'true'
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: chowewow/goink:latest
+          # Optionally add more tags if needed, e.g., based on branch or commit
+
+      - name: Check PostgreSQL logs if failure
+        if: failure()
+        run: |
+          docker logs ${{ job.services.db.id }}
+
   deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -74,12 +164,17 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
       - name: Deploy to Server
-      # Once server is set up we need to set the SSH_USER and SSH_HOST of it here
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DJANGO_SETTINGS_MODULE: ${{ secrets.DJANGO_SETTINGS_MODULE }}
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /path/to/your/app
-            docker-compose pull
-            docker-compose up -d
-            docker-compose exec web python manage.py migrate
+            cd /path/to/your/app || exit 1
+            docker-compose pull || exit 1
+            docker-compose up -d || exit 1
+            docker-compose exec web python manage.py migrate || exit 1
           EOF
 

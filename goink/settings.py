@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +21,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-al50%qhw#34!&$5(caq+_w$y3g$@0e-pi&vqro+s5-(*zd3zy-'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-al50%qhw#34!&$5(caq+_w$y3g$@0e-pi&vqro+s5-(*zd3zy-')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 
 
 # Application definition
@@ -56,12 +57,12 @@ ROOT_URLCONF = 'goink.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [],  # Add your template directories here
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
-                'django.template.context_processors.request',
+                'django.template.context_processors.request',  # Required by allauth
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -78,11 +79,11 @@ WSGI_APPLICATION = 'goink.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'goinkdb',
-        'USER': 'goinkuser',
-        'PASSWORD': 'goinkpass',
-        'HOST': 'db',  # The Docker service name
-        'PORT': '5432',
+        'NAME': os.environ.get('POSTGRES_DB', 'goinkdb'),
+        'USER': os.environ.get('POSTGRES_USER', 'goinkuser'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'goinkpass'),
+        'HOST': os.environ.get('DB_HOST', 'db'),  # The Docker service name
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
@@ -127,3 +128,4 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
