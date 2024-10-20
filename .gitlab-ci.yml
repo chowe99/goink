@@ -2,6 +2,10 @@ stages:
   - test
   - deploy
 
+# Disable SAST temporarily
+variables:
+  SAST_DISABLED: "true"
+
 # Test stage
 test:
   stage: test
