@@ -41,8 +41,17 @@ services:
       timeout: 5s
       retries: 20
       start_period: 30s
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: goink_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - web
+    networks:
+      - goink_network
 
 networks:
   goink_network:

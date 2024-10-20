@@ -1,6 +1,6 @@
+# scraper/scraper.py
 import requests
 from bs4 import BeautifulSoup
-from .models import Dataset  # Import the Dataset model
 
 def scrape_data_gov():
     url = "https://www.data.gov"
@@ -13,9 +13,9 @@ def scrape_data_gov():
         link = dataset['href']
         description = ""  # Scrape descriptions if necessary
 
-        # Save to the database
-        Dataset.objects.create(title=title, link=link, description=description)
-
+        # Process data without saving to the database
+        # For example, you could log it or send it to another service
+        print(f"Title: {title}, Link: {link}, Description: {description}")
 
 def scrape_worldbank():
     url = "https://data.worldbank.org"
@@ -28,6 +28,6 @@ def scrape_worldbank():
         link = dataset['href']
         description = ""  # Scrape descriptions if necessary
 
-        # Save to the database
-        Dataset.objects.create(title=title, link=link, description=description)
+        # Process data without saving to the database
+        print(f"Title: {title}, Link: {link}, Description: {description}")
 
