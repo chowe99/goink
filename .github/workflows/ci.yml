@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      postgres:
+      db:
         image: postgres:13
         env:
-          POSTGRES_DB: goinkdb
-          POSTGRES_USER: goinkuser
-          POSTGRES_PASSWORD: goinkpass
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         ports:
           - 5432:5432
         options: >-
@@ -38,6 +38,14 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -45,7 +53,7 @@ jobs:
 
       - name: Wait for PostgreSQL to be ready
         run: |
-          until pg_isready -h localhost -p 5432; do
+          until pg_isready -h db -p 5432; do
             echo "Waiting for PostgreSQL..."
             sleep 1
           done
@@ -58,7 +66,46 @@ jobs:
         run: |
           python manage.py test
 
-  # Optional: Add a deploy job later when we have a server
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Get remote Docker image digest
+        id: remote_digest
+        run: |
+          remote_digest=$(docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/goink:latest | jq -r '.config.digest')
+          echo "::set-output name=digest::$remote_digest"
+        continue-on-error: true
+
+      - name: Build local Docker image
+        id: local_digest
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/goink:latest .
+          local_digest=$(docker inspect --format='{{.Id}}' ${{ secrets.DOCKER_USERNAME }}/goink:latest)
+          echo "::set-output name=digest::$local_digest"
+
+      - name: Compare image digests
+        id: compare
+        run: |
+          if [ "${{ steps.remote_digest.outputs.digest }}" == "${{ steps.local_digest.outputs.digest }}" ]; then
+            echo "Images are the same, pulling the image."
+            echo "::set-output name=build_needed::false"
+          else
+            echo "Images are different, building and pushing the image."
+            echo "::set-output name=build_needed::true"
+          fi
+
+      - name: Pull or push Docker image based on comparison
+        run: |
+          if [ "${{ steps.compare.outputs.build_needed }}" == "true" ]; then
+            docker tag ${{ secrets.DOCKER_USERNAME }}/goink:latest ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.ref_name }}
+            docker tag ${{ secrets.DOCKER_USERNAME }}/goink:latest ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.sha }}
+            docker push ${{ secrets.DOCKER_USERNAME }}/goink:latest
+            docker push ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.ref_name }}
+            docker push ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.sha }}
+          else
+            docker pull ${{ secrets.DOCKER_USERNAME }}/goink:latest
+          fi
+
   deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -74,7 +121,12 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
       - name: Deploy to Server
-      # Once server is set up we need to set the SSH_USER and SSH_HOST of it here
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          DJANGO_SETTINGS_MODULE: ${{ secrets.DJANGO_SETTINGS_MODULE }}
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             cd /path/to/your/app
