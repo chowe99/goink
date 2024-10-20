@@ -113,7 +113,7 @@ jobs:
           docker logs ${{ job.services.db.id }}
 
       - name: Install jq
-        uses: mikefarah/setup-jq@v1
+        run: sudo apt-get install -y jq
 
       - name: Get remote Docker image digest
         id: remote_digest
