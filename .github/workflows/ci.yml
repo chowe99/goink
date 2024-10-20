@@ -13,6 +13,8 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      DB_HOST: '127.0.0.1'
 
     services:
       db:
@@ -78,7 +80,7 @@ jobs:
         run: |
           echo "Testing connection to PostgreSQL"
           timeout=60  # Set a timeout (in seconds)
-          while ! pg_isready -h db -p 5432; do
+          while ! pg_isready -h 127.0.0.1 -p 5432; do
             echo "Waiting for PostgreSQL..."
             sleep 3
             timeout=$((timeout - 3))
