@@ -27,6 +27,17 @@ The Goink project is a Django application and follows a standard Django project 
 - Docker and Docker Compose
 - Python 3.9+
 - PostgreSQL (for local development)
+- Node.js and npm (for frontend development)
+
+To install Node.js and npm:
+```bash
+# On Ubuntu/Debian
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# On macOS (using Homebrew)
+brew install node
+```
 
 ### Installation
 
@@ -57,7 +68,7 @@ python manage.py test
 ## Configuration
 
 - **Database Configuration**: The project uses a PostgreSQL database configured via Docker. Adjust the settings in `goink/settings.py` if using a different database setup.
-- **Environment Variables**: Sensitive information such as the database password is set in `docker-compose.yml`. Modify these values accordingly for your environment.
+- **Environment Variables**: Sensitive information such as the database password is set in `docker-compose.yml`. Modify these values accordingly for your environment, or leave them and they will default to my GitHub Secrets.
 
 ## Development
 
@@ -78,7 +89,7 @@ The server will be accessible at `http://127.0.0.1:8000/`.
 
 ## Deployment
 
-Goink can be deployed using Docker. The provided `docker-compose.yml` file includes all necessary configurations for running the Django application along with a PostgreSQL database.
+Goink can be deployed using Docker. The provided `docker-compose.yml` file includes all necessary configurations for running the Django application alongside a PostgreSQL database.
 
 For deploying to production:
 
@@ -98,4 +109,3 @@ This project is licensed under the MIT License. See the [LICENSE](./LICENSE) fil
 For any inquiries please find us on [Discord](https://discord.gg/JrKb8x534M).
 
 We hope you enjoy using Goink and look forward to your contributions!
-
