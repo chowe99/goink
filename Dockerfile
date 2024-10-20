@@ -13,17 +13,19 @@ RUN apt-get update && apt-get install -y \
     libpq-dev gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies first
+# Install Gunicorn
+RUN pip install gunicorn
+
+# Copy only requirements to leverage Docker cache
 COPY requirements.txt /app/
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Then copy the rest of the code
+# Copy the rest of the application code
 COPY . /app/
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Make port 8000 available to the world outside this container
+# Expose port 8000
 EXPOSE 8000
 
 # Run Gunicorn
