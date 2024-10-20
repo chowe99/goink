@@ -71,8 +71,9 @@ jobs:
           echo "Testing connectivity to the DB service using curl..."
           DB_CONTAINER=$(docker ps --filter "label=db=goink_db" --format "{{.Names}}")
           if [ -n "$DB_CONTAINER" ]; then
-            docker exec $DB_CONTAINER curl -s http://db:5432 || echo "Failed to connect to DB"          else
-            echo "Web container not found."
+            docker exec $DB_CONTAINER curl -s http://db:5432 || echo "Failed to connect to DB"
+          else
+            echo "DB container not found."
             docker ps -a  # List all containers for debugging
           fi
 
@@ -90,19 +91,6 @@ jobs:
             fi
           done
 
-      # - name: Check PostgreSQL Health
-      #   run: |
-      #     echo "Checking PostgreSQL health status..."
-      #     if [ -n "$DB_CONTAINER" ]; then
-      #       docker inspect --format='{{json .State.Health}}' $DB_CONTAINER || echo "Failed to get health status"
-      #     else
-      #       echo "Database container not found."
-      #     fi
-
-      # - name: Debug- Check Docker Compose services
-      #   run: |
-      #     docker-compose ps
-
       - name: Apply migrations
         run: python manage.py migrate
 
@@ -115,7 +103,6 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-
       - name: Check PostgreSQL logs if failure
         if: failure()
         run: |
@@ -127,16 +114,30 @@ jobs:
       - name: Get remote Docker image digest
         id: remote_digest
         run: |
-          remote_digest=$(docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/goink:latest | jq -r '.config.digest')
-          echo "digest=$remote_digest" >> $GITHUB_ENV
+          # Attempt to pull the latest image; if it doesn't exist, handle gracefully
+          docker pull chowewow/goink:latest || echo "Image does not exist yet."
+          
+          # Retrieve the RepoDigest of the remote image
+          remote_digest=$(docker image inspect chowewow/goink:latest --format='{{index .RepoDigests 0}}' || echo "none")
+          
+          # Extract only the digest part
+          remote_digest_only=$(echo $remote_digest | cut -d'@' -f2)
+          
+          echo "digest=$remote_digest_only" >> $GITHUB_ENV
         continue-on-error: true
 
       - name: Build local Docker image
         id: local_digest
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/goink:latest .
-          local_digest=$(docker inspect --format='{{.Id}}' ${{ secrets.DOCKER_USERNAME }}/goink:latest)
-          echo "local_digest=$local_digest" >> $GITHUB_OUTPUT
+          docker build -t chowewow/goink:latest .
+          
+          # Retrieve the RepoDigest of the local image
+          local_digest=$(docker image inspect chowewow/goink:latest --format='{{index .RepoDigests 0}}' || echo "none")
+          
+          # Extract only the digest part
+          local_digest_only=$(echo $local_digest | cut -d'@' -f2)
+          
+          echo "local_digest=$local_digest_only" >> $GITHUB_OUTPUT
 
       - name: Compare image digests
         id: compare
@@ -155,14 +156,17 @@ jobs:
       - name: Pull or push Docker image based on comparison
         run: |
           if [ "${{ steps.compare.outputs.build_needed }}" == "true" ]; then
-            # Use the sanitized_ref for tagging
-            docker tag ${{ secrets.DOCKER_USERNAME }}/goink:latest ${{ secrets.DOCKER_USERNAME }}/goink:${{ env.sanitized_ref }}
-            docker tag ${{ secrets.DOCKER_USERNAME }}/goink:latest ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.sha }}
-            docker push ${{ secrets.DOCKER_USERNAME }}/goink:latest
-            docker push ${{ secrets.DOCKER_USERNAME }}/goink:${{ env.sanitized_ref }}
-            docker push ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.sha }}
+            # Tag the image with the sanitized branch name and commit SHA
+            docker tag chowewow/goink:latest chowewow/goink:${{ env.sanitized_ref }}
+            docker tag chowewow/goink:latest chowewow/goink:${{ github.sha }}
+            
+            # Push the tagged images
+            docker push chowewow/goink:latest
+            docker push chowewow/goink:${{ env.sanitized_ref }}
+            docker push chowewow/goink:${{ github.sha }}
           else
-            docker pull ${{ secrets.DOCKER_USERNAME }}/goink:latest
+            # Pull the existing image to ensure it's up to date
+            docker pull chowewow/goink:latest
           fi
 
       - name: Check PostgreSQL container logs if failed
