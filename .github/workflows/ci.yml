@@ -27,8 +27,8 @@ jobs:
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
-          --health-start-period 20s
+          --health-retries 20
+          --health-start-period 30s
 
     steps:
       - name: Checkout code
@@ -45,15 +45,18 @@ jobs:
           pip install -r requirements.txt
 
       - name: Wait for PostgreSQL to be ready
-        run: sleep 10 # |
-          # until pg_isready -h db -p 5432; do
-          #   echo "Waiting for PostgreSQL..."
-          #   sleep 3
-          # done
+        run: |
+          until pg_isready -h db -p 5432; do
+            echo "Waiting for PostgreSQL..."
+            sleep 5
+          done
 
       - name: Apply migrations
         run: |
-          python manage.py migrate
+          until python manage.py migrate; do
+            echo "Migration failed, retrying in 5 seconds..."
+            sleep 5
+          done
 
       - name: Run tests
         run: |
@@ -79,12 +82,12 @@ jobs:
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/goink:latest .
           local_digest=$(docker inspect --format='{{.Id}}' ${{ secrets.DOCKER_USERNAME }}/goink:latest)
-          echo "::set-output name=digest::$local_digest"
+          echo "::set-output name=local_digest::$local_digest"
 
       - name: Compare image digests
         id: compare
         run: |
-          if [ "${{ steps.remote_digest.outputs.digest }}" == "${{ steps.local_digest.outputs.digest }}" ]; then
+          if [ "${{ steps.remote_digest.outputs.digest }}" == "${{ steps.local_digest.outputs.local_digest }}" ]; then
             echo "Images are the same, pulling the image."
             echo "::set-output name=build_needed::false"
           else
@@ -108,7 +111,6 @@ jobs:
         if: failure()
         run: |
           docker logs ${{ job.services.db.id }}
-
 
   deploy:
     needs: build-and-test
