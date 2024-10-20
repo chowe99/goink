@@ -67,22 +67,13 @@ jobs:
       - name: Debug- Test connectivity to the DB service using curl
         run: |
           echo "Testing connectivity to the DB service using curl..."
-          container_id=$(docker ps -qf "name=goink_web")
-          if [ -n "$container_id" ]; then
-            docker exec $container_id curl -s http://db:5432 || echo "Failed to connect to DB"
+          web_container=$(docker ps -qf "name=goink_web")
+          if [ -n "$web_container" ]; then
+            docker exec $web_container curl -s http://db:5432 || echo "Failed to connect to DB"
           else
             echo "Web container not found."
+            docker ps -a  # List all containers for debugging
           fi
-      - name: Check Database Health
-        run: |
-          echo "Checking PostgreSQL health status..."
-          docker inspect --format='{{json .State.Health}}' goink_db
-
-      - name: Debug- Check Docker Compose services
-        run: |
-          docker-compose ps
-
-
 
       - name: Wait for PostgreSQL to be ready
         run: |
@@ -91,6 +82,21 @@ jobs:
             echo "Waiting for PostgreSQL..."
             sleep 3
           done
+
+      - name: Check PostgreSQL Health
+        run: |
+          echo "Checking PostgreSQL health status..."
+          container_id=$(docker ps -qf "name=goink_db")
+          if [ -n "$container_id" ]; then
+            docker inspect --format='{{json .State.Health}}' $container_id || echo "Failed to get health status"
+          else
+            echo "Database container not found."
+          fi
+
+      - name: Debug- Check Docker Compose services
+        run: |
+          docker-compose ps
+
 
       - name: Apply migrations
         run: python manage.py migrate

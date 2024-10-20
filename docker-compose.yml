@@ -29,7 +29,10 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - goink_network
+      goink_network:
+        aliases:
+          - db
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
       interval: 10s
