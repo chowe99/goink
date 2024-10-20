@@ -64,10 +64,25 @@ jobs:
         run: |
           docker network inspect ${{ job.services.db.network }}
 
-      - name: Debug- Test connectivity from web container to db
+      - name: Debug- Test connectivity to the DB service using curl
         run: |
           echo "Testing connectivity to the DB service using curl..."
-          docker exec ${{ job.services.web.id }} curl -s http://db:5432 || echo "Failed to connect to DB"
+          container_id=$(docker ps -qf "name=goink_web")
+          if [ -n "$container_id" ]; then
+            docker exec $container_id curl -s http://db:5432 || echo "Failed to connect to DB"
+          else
+            echo "Web container not found."
+          fi
+      - name: Check Database Health
+        run: |
+          echo "Checking PostgreSQL health status..."
+          docker inspect --format='{{json .State.Health}}' goink_db
+
+      - name: Debug- Check Docker Compose services
+        run: |
+          docker-compose ps
+
+
 
       - name: Wait for PostgreSQL to be ready
         run: |
