@@ -106,6 +106,12 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/goink:latest
           fi
 
+      - name: Check PostgreSQL container logs if failed
+        if: failure()
+        run: |
+          docker logs ${{ job.services.db.id }}
+
+
   deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
