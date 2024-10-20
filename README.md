@@ -32,7 +32,7 @@ The Goink project is a Django application and follows a standard Django project 
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/goink.git
+   git clone https://github.com/chowe99/goink.git
    ```
 
 2. Build and start the application using Docker Compose:
