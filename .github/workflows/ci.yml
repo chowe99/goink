@@ -17,6 +17,8 @@ jobs:
     services:
       db:
         image: postgres:13
+        labels:
+          - db=goink_db
         env:
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -67,10 +69,9 @@ jobs:
       - name: Debug- Test connectivity to the DB service using curl
         run: |
           echo "Testing connectivity to the DB service using curl..."
-          web_container=$(docker ps -qf "name=goink_web")
-          if [ -n "$web_container" ]; then
-            docker exec $web_container curl -s http://db:5432 || echo "Failed to connect to DB"
-          else
+          DB_CONTAINER=$(docker ps --filter "label=db=goink_db" --format "{{.Names}}")
+          if [ -n "$DB_CONTAINER" ]; then
+            docker exec $DB_CONTAINER curl -s http://db:5432 || echo "Failed to connect to DB"          else
             echo "Web container not found."
             docker ps -a  # List all containers for debugging
           fi
@@ -78,17 +79,22 @@ jobs:
       - name: Wait for PostgreSQL to be ready
         run: |
           echo "Testing connection to PostgreSQL"
-          until pg_isready -h db -p 5432; do
+          timeout=60  # Set a timeout (in seconds)
+          while ! pg_isready -h db -p 5432; do
             echo "Waiting for PostgreSQL..."
             sleep 3
+            timeout=$((timeout - 3))
+            if [ $timeout -le 0 ]; then
+              echo "Timeout reached while waiting for PostgreSQL."
+              exit 1
+            fi
           done
 
       - name: Check PostgreSQL Health
         run: |
           echo "Checking PostgreSQL health status..."
-          container_id=$(docker ps -qf "name=goink_db")
-          if [ -n "$container_id" ]; then
-            docker inspect --format='{{json .State.Health}}' $container_id || echo "Failed to get health status"
+          if [ -n "$DB_CONTAINER" ]; then
+            docker inspect --format='{{json .State.Health}}' $DB_CONTAINER || echo "Failed to get health status"
           else
             echo "Database container not found."
           fi
@@ -110,13 +116,13 @@ jobs:
           docker logs ${{ job.services.db.id }}
 
       - name: Install jq
-        run: sudo apt-get install -y jq
+        uses: mikefarah/setup-jq@v1
 
       - name: Get remote Docker image digest
         id: remote_digest
         run: |
           remote_digest=$(docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/goink:latest | jq -r '.config.digest')
-          echo "::set-output name=digest::$remote_digest"
+          echo "digest=$remote_digest" >> $GITHUB_ENV
         continue-on-error: true
 
       - name: Build local Docker image
@@ -177,9 +183,9 @@ jobs:
           DJANGO_SETTINGS_MODULE: ${{ secrets.DJANGO_SETTINGS_MODULE }}
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            cd /path/to/your/app
-            docker-compose pull
-            docker-compose up -d
-            docker-compose exec web python manage.py migrate
+            cd /path/to/your/app || exit 1
+            docker-compose pull || exit 1
+            docker-compose up -d || exit 1
+            docker-compose exec web python manage.py migrate || exit 1
           EOF
 
