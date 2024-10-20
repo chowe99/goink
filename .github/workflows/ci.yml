@@ -27,8 +27,8 @@ jobs:
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 20
-          --health-start-period 30s
+          --health-retries 10
+          --health-start-period 20s
 
     steps:
       - name: Checkout code
@@ -44,23 +44,39 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Debug- Check hosts
+        run: |
+          echo "Hosts file:"
+          cat /etc/hosts
+
+      - name: Debug- Network inspection
+        run: |
+          echo "Network interfaces:"
+          ifconfig || ip addr
+          echo "Ping DB container:"
+          ping -c 4 db || echo "DB not reachable"
+          echo "DNS lookup for 'db':"
+          nslookup db || echo "DNS lookup failed"
+          echo "Checking open ports:"
+          netstat -tuln || ss -tuln
+
+      - name: Debug- Check Docker network
+        run: |
+          docker network inspect ${{ job.services.db.network }}
+
       - name: Wait for PostgreSQL to be ready
         run: |
+          echo "Testing connection to PostgreSQL"
           until pg_isready -h db -p 5432; do
             echo "Waiting for PostgreSQL..."
-            sleep 5
+            sleep 3
           done
 
       - name: Apply migrations
-        run: |
-          until python manage.py migrate; do
-            echo "Migration failed, retrying in 5 seconds..."
-            sleep 5
-          done
+        run: python manage.py migrate
 
       - name: Run tests
-        run: |
-          python manage.py test
+        run: python manage.py test
 
       - name: Check PostgreSQL logs if failure
         if: failure()
