@@ -129,26 +129,30 @@ jobs:
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/goink:latest .
           local_digest=$(docker inspect --format='{{.Id}}' ${{ secrets.DOCKER_USERNAME }}/goink:latest)
-          echo "::set-output name=local_digest::$local_digest"
+          echo "local_digest=$local_digest" >> $GITHUB_OUTPUT
 
       - name: Compare image digests
         id: compare
         run: |
-          if [ "${{ steps.remote_digest.outputs.digest }}" == "${{ steps.local_digest.outputs.local_digest }}" ]; then
+          if [ "${{ env.digest }}" == "${{ steps.local_digest.outputs.local_digest }}" ]; then
             echo "Images are the same, pulling the image."
-            echo "::set-output name=build_needed::false"
+            echo "build_needed=false" >> $GITHUB_OUTPUT
           else
             echo "Images are different, building and pushing the image."
-            echo "::set-output name=build_needed::true"
+            # Sanitize the ref name by replacing slashes with hyphens
+            sanitized_ref=$(echo "${GITHUB_REF#refs/heads/}" | tr '/' '-')
+            echo "sanitized_ref=$sanitized_ref" >> $GITHUB_ENV
+            echo "build_needed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Pull or push Docker image based on comparison
         run: |
           if [ "${{ steps.compare.outputs.build_needed }}" == "true" ]; then
-            docker tag ${{ secrets.DOCKER_USERNAME }}/goink:latest ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.ref_name }}
+            # Use the sanitized_ref for tagging
+            docker tag ${{ secrets.DOCKER_USERNAME }}/goink:latest ${{ secrets.DOCKER_USERNAME }}/goink:${{ env.sanitized_ref }}
             docker tag ${{ secrets.DOCKER_USERNAME }}/goink:latest ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.sha }}
             docker push ${{ secrets.DOCKER_USERNAME }}/goink:latest
-            docker push ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.ref_name }}
+            docker push ${{ secrets.DOCKER_USERNAME }}/goink:${{ env.sanitized_ref }}
             docker push ${{ secrets.DOCKER_USERNAME }}/goink:${{ github.sha }}
           else
             docker pull ${{ secrets.DOCKER_USERNAME }}/goink:latest
