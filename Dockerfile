@@ -16,13 +16,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Gunicorn
-RUN pip install gunicorn
-
-# Copy only requirements to leverage Docker cache
+# Install Gunicorn and Python dependencies
 COPY requirements.txt /app/
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code
