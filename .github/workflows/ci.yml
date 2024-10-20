@@ -30,6 +30,12 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Export environment variables
+        run: |
+          echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}" >> $GITHUB_ENV
+          echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}" >> $GITHUB_ENV
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> $GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@v3
 
