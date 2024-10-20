@@ -41,7 +41,7 @@ The Goink project is a Django application and follows a standard Django project 
    ```
    This will set up the web service along with a PostgreSQL database.
 
-3. Access the application by navigating to `http://localhost:8000` in your web browser.
+3. Access the application by navigating to `http://localhost:3000` in your web browser.
 
 ### Running the Scraper
 
