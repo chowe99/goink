@@ -59,4 +59,27 @@ jobs:
           python manage.py test
 
   # Optional: Add a deploy job later when we have a server
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'  # Only deploy from master branch
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Deploy to Server
+      # Once server is set up we need to set the SSH_USER and SSH_HOST of it here
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            cd /path/to/your/app
+            docker-compose pull
+            docker-compose up -d
+            docker-compose exec web python manage.py migrate
+          EOF
 
