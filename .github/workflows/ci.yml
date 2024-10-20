@@ -90,18 +90,18 @@ jobs:
             fi
           done
 
-      - name: Check PostgreSQL Health
-        run: |
-          echo "Checking PostgreSQL health status..."
-          if [ -n "$DB_CONTAINER" ]; then
-            docker inspect --format='{{json .State.Health}}' $DB_CONTAINER || echo "Failed to get health status"
-          else
-            echo "Database container not found."
-          fi
+      # - name: Check PostgreSQL Health
+      #   run: |
+      #     echo "Checking PostgreSQL health status..."
+      #     if [ -n "$DB_CONTAINER" ]; then
+      #       docker inspect --format='{{json .State.Health}}' $DB_CONTAINER || echo "Failed to get health status"
+      #     else
+      #       echo "Database container not found."
+      #     fi
 
-      - name: Debug- Check Docker Compose services
-        run: |
-          docker-compose ps
+      # - name: Debug- Check Docker Compose services
+      #   run: |
+      #     docker-compose ps
 
       - name: Apply migrations
         run: python manage.py migrate
