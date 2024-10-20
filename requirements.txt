@@ -4,3 +4,4 @@ djangorestframework
 psycopg2
 requests
 beautifulsoup4
+django-cors-headers

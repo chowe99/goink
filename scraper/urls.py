@@ -1,7 +1,10 @@
-from django.urls import path
-from . import views
+# scraper/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import scrape_view, AirQualityDataAPIView
+router = DefaultRouter()
 
 urlpatterns = [
-    path('scrape/', views.scrape_view, name='scrape'),  # Route for scraping data
+    path('scrape/', scrape_view, name='scrape'),
+    path('api/air-quality/', AirQualityDataAPIView.as_view(), name='air-quality-data'),
 ]
-
