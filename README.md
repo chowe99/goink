@@ -2,7 +2,9 @@
 
 ## Overview
 
-Goink is a web application designed to help users visualize data retrieved from open-source datasets, such as those available on [data.gov](https://www.data.gov) and [World Bank](https://data.worldbank.org). With Goink, users can access and view visual representations of various public datasets, making it easier to explore and understand important statistics like crime rates, average income, or other socio-economic indicators for a specific area.
+Goink is a web application designed to help users visualize data retrieved from open-source datasets, such as those available on [data.gov](https://www.data.gov) and [World Bank](https://data.worldbank.org). With Goink, users can access and view visual representations of various public datasets, making it easier to explore and understand important statistics like crime rates, average income, or other socio-economic indicators for a specific area. 
+
+See [data tools](https://resources.data.gov/categories/data-tools/) for useful tools and a preexisting data visualiser.
 
 The application aims to simplify the exploration of public data by offering an intuitive interface to view the data and gain insights that can help users make data-driven decisions.
 
